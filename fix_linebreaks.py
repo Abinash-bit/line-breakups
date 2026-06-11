@@ -166,11 +166,15 @@ def fix_linebreaks(doc1_path, doc2_path):
     lines1 = read_lines(doc1_path)
     lines2 = read_lines(doc2_path)
 
-    # flatten doc1
+    # flatten doc1, remembering for EACH word whether it was inside a
+    # ♪ ... ♪ lyric line in doc1 itself (we keep doc1's music notes,
+    # never doc2's)
     w1 = []
+    noted1 = []
     for ln in lines1:
-        toks, _ = line_to_tokens(ln)
+        toks, has_note = line_to_tokens(ln)
         w1.extend(toks)
+        noted1.extend([has_note] * len(toks))
 
     # flatten doc2, remembering each line's token span + note flag
     w2 = []
@@ -187,7 +191,7 @@ def fix_linebreaks(doc1_path, doc2_path):
 
     out = []
     prev_end = 0
-    for (a, b, has_note) in spans2:
+    for (a, b, ref_note) in spans2:
         # start exactly where the previous line ended so that no word of
         # doc1 is ever lost; end at the mapped cut position
         s = prev_end
@@ -197,11 +201,18 @@ def fix_linebreaks(doc1_path, doc2_path):
         if not toks:
             # extra reference line with no counterpart in doc1 -> skip
             continue
+        # a line is a lyric line ONLY if these words were inside ♪ ... ♪
+        # in doc1 itself (doc2's note marks are ignored completely)
+        n_noted = sum(1 for f in noted1[s:e] if f)
+        has_note = n_noted * 2 >= len(toks) and n_noted > 0
         text = " ".join(toks)
         out.append((text, has_note))
     # any tail words of doc1 not consumed (shouldn't happen, but be safe)
     if prev_end < len(w1):
-        out.append((" ".join(w1[prev_end:]), False))
+        s = prev_end
+        n_noted = sum(1 for f in noted1[s:] if f)
+        has_note = n_noted * 2 >= len(w1) - s and n_noted > 0
+        out.append((" ".join(w1[s:]), has_note))
     return out
 
 
@@ -218,8 +229,9 @@ def write_docx(lines, out_path, font_name="Courier New", font_size=None):
         if not first:
             d.add_paragraph("")  # exactly ONE empty line between two lines
         first = False
-        # NOTE: we intentionally do NOT add any ♪ marks — the goal is to fix
-        # the line breaks only, keeping plain text.
+        # ♪ marks come from doc1's own lyric lines only (never from doc2)
+        if has_note:
+            text = f"{NOTE}  {text}  {NOTE}"
         d.add_paragraph(text)
     d.save(out_path)
 

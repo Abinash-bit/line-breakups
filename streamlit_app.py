@@ -69,7 +69,7 @@ if f1 and f2:
 
                 with st.expander("Preview (first 40 lines)"):
                     for text, has_note in lines[:40]:
-                        st.text(text)
+                        st.text(f"♪  {text}  ♪" if has_note else text)
             except Exception as e:
                 st.error(f"Something went wrong: {e}")
 else:
